@@ -10,7 +10,6 @@ using Nop.Core;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Common;
 using Nop.Core.Events;
-using Nop.Data.Extensions;
 
 namespace Nop.Data
 {
@@ -127,7 +126,7 @@ namespace Nop.Data
                     query = (await GetEntitiesAsync()).OfType<ISoftDeletedEntity>().Where(entry => !entry.Deleted).OfType<TEntity>();
 
                 //get entries
-                var entries = await query.Where(entry => ids.Contains(entry.Id)).ToListAsync();
+                var entries = await AsyncIEnumerableExtensions.ToListAsync(query.Where(entry => ids.Contains(entry.Id)));
 
                 //sort by passed identifiers
                 var sortedEntries = new List<TEntity>();
@@ -162,7 +161,7 @@ namespace Nop.Data
             async Task<IList<TEntity>> getAllAsync()
             {
                 var query = func != null ? func(Table) : Table;
-                return await query.ToListAsync();
+                return await AsyncIEnumerableExtensions.ToListAsync(query);
             }
 
             return await GetEntities(getAllAsync, getCacheKey);
@@ -181,7 +180,7 @@ namespace Nop.Data
             async Task<IList<TEntity>> getAllAsync()
             {
                 var query = func != null ? await func(Table) : Table;
-                return await query.ToListAsync();
+                return await AsyncIEnumerableExtensions.ToListAsync(query);
             }
 
             return await GetEntities(getAllAsync, getCacheKey);
@@ -200,7 +199,7 @@ namespace Nop.Data
             async Task<IList<TEntity>> getAllAsync()
             {
                 var query = func != null ? await func(Table) : Table;
-                return await query.ToListAsync();
+                return await AsyncIEnumerableExtensions.ToListAsync(query);
             }
 
             return await GetEntities(getAllAsync, getCacheKey);
@@ -285,8 +284,8 @@ namespace Nop.Data
         /// <returns>Copy of the passed entity</returns>
         public virtual async Task<TEntity> LoadOriginalCopyAsync(TEntity entity)
         {
-            return await (await _dataProvider.GetTableAsync<TEntity>())
-                .FirstOrDefaultAsync(e => e.Id == Convert.ToInt32(entity.Id));
+            return (await _dataProvider.GetTableAsync<TEntity>())
+                .FirstOrDefault(e => e.Id == Convert.ToInt32(entity.Id));
         }
 
         /// <summary>
@@ -363,13 +362,11 @@ namespace Nop.Data
             if (entities.OfType<ISoftDeletedEntity>().Any())
             {
                 foreach (var entity in entities)
-                {
                     if (entity is ISoftDeletedEntity softDeletedEntity)
                     {
                         softDeletedEntity.Deleted = true;
                         await _dataProvider.UpdateEntityAsync(entity);
                     }
-                }
             }
             else
                 await _dataProvider.BulkDeleteEntitiesAsync(entities);
@@ -412,7 +409,7 @@ namespace Nop.Data
         /// <param name="resetIdentity">Performs reset identity column</param>
         public virtual async Task TruncateAsync(bool resetIdentity = false)
         {
-            await (await _dataProvider.GetTableAsync<TEntity>()).TruncateAsync(resetIdentity);
+            (await _dataProvider.GetTableAsync<TEntity>()).Truncate(resetIdentity);
         }
 
         #endregion
@@ -427,9 +424,9 @@ namespace Nop.Data
         /// <summary>
         /// Gets an entity set
         /// </summary>
-        protected virtual async Task<ITable<TEntity>> GetEntitiesAsync()
+        protected virtual Task<ITable<TEntity>> GetEntitiesAsync()
         {
-            return _entities ??= await _dataProvider.GetTableAsync<TEntity>();
+            return Task.FromResult(_entities ??= _dataProvider.GetTable<TEntity>());
         }
 
         #endregion
